@@ -1,6 +1,8 @@
 import re
 import torch
 
+from vocabulary import Vocabulary
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def normalize_line(line):
@@ -13,30 +15,6 @@ def normalize_line(line):
     # remove digits
     line = re.sub(r"\d+", ' ', line)
     return line
-
-class Vocabulary:
-    def __init__(self):
-        self.word2index = {'SOS': 0, 'EOS': 1}
-        self.index2word = {0: 'SOS', 1: 'EOS'}
-        self.n_words = 2
-        self.word_counts = {}
-        self.vocab_ = set()
-
-    def add_sentence(self, line):
-        for word in line.split(' '):
-            if word == ' ' or word == '':
-                continue
-            self.add_word(word)
-    
-    def add_word(self, word):
-        if word in self.word2index.keys():
-            self.word_counts[word] += 1
-        else:
-            self.vocab_.add(word)
-            self.word2index[word] = self.n_words
-            self.index2word[self.n_words] = word
-            self.word_counts[word] = 1
-            self.n_words += 1
 
 def read_file(input, max_rows=None):
     count = 0
@@ -58,6 +36,28 @@ def read_file(input, max_rows=None):
     return lines, vocab
 
 def build_pairs_and_vocab(input, target, max_rows=None):
+    """
+    Read input and target language files and return a list
+    of paired sentences, with text normalised
+
+    Parameters
+    ----------
+    input: str
+        Filepath to input language data file
+    target: str
+        Filepath to target language data file
+    max_rows: int, default=None
+        Max number of lines/sentences to read
+    
+    Returns
+    -------
+    paired: List[List[str]]
+        All sentences, paired between languages
+    input_vocab: Vocabulary
+        Vocabulary object for input language
+    target_vocab: Vocabulary
+        Vocabulary object for output language
+    """
     l1_lines, l1_vocab = read_file(input, max_rows)
     l2_lines, l2_vocab = read_file(target, max_rows)
 
@@ -72,15 +72,35 @@ def index_from_sentence(sentence, vocab):
     return [vocab.word2index[word] for word in sentence.split(' ')]
 
 def tensorize_sentence(pair, input_vocab, target_vocab, eos=1):
-    # turn words into list of indices
-    input_index = index_from_sentence(pair[0], input_vocab)
-    target_index = index_from_sentence(pair[1], target_vocab)
-    # add EOS token to sentence
-    input_index.append(eos)
-    target_index.append(eos)
-    # turn lists into tensors
-    input_tensor = torch.tensor(input_index, dtype=torch.long, device=device)
-    target_tensor = torch.tensor(target_index, dtype=torch.long, device=device)
-    return (input_tensor, target_tensor)
+    """
+    Turn a pair of sentences into pytorch tensors, ready for use
+
+    Parameters
+    ----------
+    pair: List[str]
+        Input-target pair of sentences to tensorize
+    input_vocab: Vocabulary
+        Vocabulary object for input language
+    target_vocab: Vocabulary
+        Vocabulary object for target language
+    eos: Union[int, str], default=1
+        EOS token to append to sentences
+    
+    Returns
+    -------
+    tensors: List[torch.tensor]
+        Pair of tensors corresponding to original pair of sentences
+    """
+    tensors = []
+    vocabs = (input_vocab, target_vocab)
+    for i, sentence in enumerate(pair):
+        # turn words into list of indices
+        index = index_from_sentence(sentence, vocabs[i])
+        # add EOS token to sentence
+        index.append(eos)
+        # turn lists into tensors
+        tensor = torch.tensor(index, dtype=torch.long, device=device)
+        tensors.append(tensor)
+    return tensors
 
 
