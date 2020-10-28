@@ -1,4 +1,7 @@
 import re
+import torch
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def normalize_line(line):
     # turn to lower case
@@ -6,9 +9,9 @@ def normalize_line(line):
     # remove leading/trailing white space
     line = line.strip()
     # remove punctuation
-    line = re.sub("[^\w ]", ' ', line)
+    line = re.sub(r"[^\w ]", ' ', line)
     # remove digits
-    line = re.sub("\d+", ' ', line)
+    line = re.sub(r"\d+", ' ', line)
     return line
 
 class Vocabulary:
@@ -54,13 +57,30 @@ def read_file(input, max_rows=None):
             lines.append(line)
     return lines, vocab
 
-def build_pairs_and_vocab(lang1, lang2, max_rows=None):
-    l1_lines, l1_vocab = read_file(lang1, max_rows)
-    l2_lines, l2_vocab = read_file(lang2, max_rows)
+def build_pairs_and_vocab(input, target, max_rows=None):
+    l1_lines, l1_vocab = read_file(input, max_rows)
+    l2_lines, l2_vocab = read_file(target, max_rows)
 
     paired = list(zip(l1_lines, l2_lines))
 
     print(f'Number of sentences: {len(paired)}')
-    print(f'Number of lang 1 words: {l1_vocab.n_words}')
-    print(f'Number of lang 2 words: {l2_vocab.n_words}')
+    print(f'Number of input words: {l1_vocab.n_words}')
+    print(f'Number of target words: {l2_vocab.n_words}')
     return paired, l1_vocab, l2_vocab
+
+def index_from_sentence(sentence, vocab):
+    return [vocab.word2index[word] for word in sentence.split(' ')]
+
+def tensorize_sentence(pair, input_vocab, target_vocab, eos=1):
+    # turn words into list of indices
+    input_index = index_from_sentence(pair[0], input_vocab)
+    target_index = index_from_sentence(pair[1], target_vocab)
+    # add EOS token to sentence
+    input_index.append(eos)
+    target_index.append(eos)
+    # turn lists into tensors
+    input_tensor = torch.tensor(input_index, dtype=torch.long, device=device)
+    target_tensor = torch.tensor(target_index, dtype=torch.long, device=device)
+    return (input_tensor, target_tensor)
+
+
